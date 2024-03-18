@@ -11,7 +11,7 @@ void setup() {
   Serial.begin(115200);
 
   /* Wait Serial */
-  while (!Serial) {}
+  while (!wsSerial) {}
 
   printf("\n");
   printf("Arduino Core API: %d.%d.%d\n", CORE_MAJOR, CORE_MINOR, CORE_PATCH);

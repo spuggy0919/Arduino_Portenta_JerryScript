@@ -1784,6 +1784,7 @@ jerryx_handler_print (const jerry_call_info_t *call_info_p, /**< call informatio
 {
   (void) call_info_p; /* unused */
 
+
   for (jerry_length_t index = 0; index < args_cnt; index++)
   {
     if (index > 0)

@@ -6,6 +6,7 @@
 #ifdef JERRYSCRIPT
 #include "Arduino_Portenta_JerryScript.h"
 int cmd_JerryScript_Repl(int argc,char* argv[]);
+int  cmd_JerryScript_RunFile(int argc,char* argv[]);
 int cmd_JerryScript_Basic(int argc,char* argv[]);
 #endif
 

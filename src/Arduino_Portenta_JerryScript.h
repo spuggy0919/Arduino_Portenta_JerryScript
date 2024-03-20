@@ -31,6 +31,7 @@
 #include <Arduino.h>
 // #include <mbed.h>
 
+#include "jerryscript-config.h"
 #include "jerryscript.h"
 #include "jerryscript-ext.h"
 
@@ -102,6 +103,7 @@ jerryxx_register_global_property (const char *name_p, /**< name of the property 
                                   jerry_value_t value, /**< value of the property */
                                   bool free_value); /**< take ownership of the value */
 
+jerry_value_t jerryxx_get_global_property(const char *name_p);
 /**
  * Run JavaScript scheduler (user for switch setTimeout and setInterval threads).
  *

@@ -30,6 +30,10 @@
 #include "Arduino_Portenta_JerryScript.h"
 #include "ESP32inc.h"
 
+typedef uint8_t pin_size_t;
+typedef uint8_t BitOrder;
+typedef uint8_t PinStatus;
+typedef void(voidFuncPtrParam)();
 /**
  * Default implementation of jerry_port_fatal. Calls 'abort' if exit code is
  * non-zero, 'exit' otherwise.
@@ -215,7 +219,7 @@ jerry_port_source_read(const char *file_name_p,  /**< file name */
     return NULL;
   }
 
-  size_t bytes_read = g_fsio.fread((char *)buffer_p, 1u, file_size, file_p);
+  size_t bytes_read = g_fsio.fread((char *)buffer_p, 1, file_size, file_p);
 
   if (bytes_read != file_size)
   {
@@ -314,6 +318,8 @@ jerry_port_context_alloc(size_t context_size)
   size_t total_size = context_size + JERRY_GLOBAL_HEAP_SIZE * 1024;
   current_context_p = (jerry_context_t *)malloc(total_size);
 
+  wsTextPrintf("PORT:jerry_port_context_alloc=%d,%d\n",context_size,total_size);
+
   return total_size;
 } /* jerry_port_context_alloc */
 
@@ -338,6 +344,47 @@ jerry_port_context_free(void)
 } /* jerry_port_context_free */
 #if 1
 /**
+ * Register a JavaScript property in the global object.
+ *
+ * @return true - if the operation was successful,
+ *         false - otherwise.
+ */
+bool jerryxx_register_global_property(const char *name_p,  /**< name of the property */
+                                      jerry_value_t value, /**< value of the property */
+                                      bool free_value)     /**< take ownership of the value */
+{
+  jerry_value_t global_object = jerry_current_realm();
+  jerry_value_t property_name_val = jerry_string_sz(name_p);
+
+  jerry_value_t result_val = jerry_object_set(global_object, property_name_val, value);
+  bool result = jerry_value_is_true(result_val);
+
+  jerry_value_free(result_val);
+  jerry_value_free(property_name_val);
+  jerry_value_free(global_object);
+
+  if (free_value)
+  {
+    jerry_value_free(value);
+  }
+
+  return result;
+} /* jerryxx_register_global_property */
+jerry_value_t jerryxx_get_global_property(const char *name_p) /**< name of the property */
+{
+  jerry_value_t global_object = jerry_current_realm();
+  jerry_value_t property_name = jerry_string_sz(name_p);
+
+  jerry_value_t property_val = jerry_object_get(global_object, property_name);
+
+  jerry_value_t result = property_val;
+  jerry_value_free(property_val);
+  jerry_value_free(property_name);
+  jerry_value_free(global_object);
+
+  return result;
+} /* jerryxx_register_global_property */
+/**
  * Register Extra API into JavaScript global object.
  *
  * @return true - if the operation was successful,
@@ -353,6 +400,7 @@ cleanup:
   return ret;
 }
 #else
+
 /*******************************************************************************
  *                                   Extra API                                 *
  ******************************************************************************/
@@ -395,33 +443,6 @@ bool jerryxx_cleanup_scheduler_map(void)
   }
 } /* jerryxx_cleanup_scheduler_map */
 
-/**
- * Register a JavaScript property in the global object.
- *
- * @return true - if the operation was successful,
- *         false - otherwise.
- */
-bool jerryxx_register_global_property(const char *name_p,  /**< name of the property */
-                                      jerry_value_t value, /**< value of the property */
-                                      bool free_value)     /**< take ownership of the value */
-{
-  jerry_value_t global_obj_val = jerry_current_realm();
-  jerry_value_t property_name_val = jerry_string_sz(name_p);
-
-  jerry_value_t result_val = jerry_object_set(global_obj_val, property_name_val, value);
-  bool result = jerry_value_is_true(result_val);
-
-  jerry_value_free(result_val);
-  jerry_value_free(property_name_val);
-  jerry_value_free(global_obj_val);
-
-  if (free_value)
-  {
-    jerry_value_free(value);
-  }
-
-  return result;
-} /* jerryxx_register_global_property */
 
 /**
  * Register Extra API into JavaScript global object.
@@ -624,7 +645,7 @@ JERRYXX_DECLARE_FUNCTION(clear_interval)
 
   return jerry_undefined();
 } /* js_clear_interval */
-
+#endif // no scheduler
 /*******************************************************************************
  *                                  Arduino API                                *
  ******************************************************************************/
@@ -638,75 +659,109 @@ JERRYXX_DECLARE_FUNCTION(clear_interval)
 bool jerryxx_register_arduino_api(void)
 {
   bool ret = false;
-
+  // return true;
   /* Register Constants in the global object */
-
+#if 0
   /* Bit Order */
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("LSBFIRST", jerry_number(LSBFIRST), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("MSBFIRST", jerry_number(MSBFIRST), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("LSBFIRST", (jerry_value_t)(LSBFIRST), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("MSBFIRST", (jerry_value_t)(MSBFIRST), true));
 
   /* PINs Status */
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("HIGH", jerry_number(HIGH), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("LOW", jerry_number(LOW), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("CHANGE", jerry_number(CHANGE), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("RISING", jerry_number(RISING), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("FALLING", jerry_number(FALLING), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("HIGH", (jerry_value_t)(HIGH), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("LOW", (jerry_value_t)(LOW), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("CHANGE", (jerry_value_t)(CHANGE), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("RISING", (jerry_value_t)(RISING), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("FALLING", (jerry_value_t)(FALLING), true));
+return true;
 
   /* PINs Mode */
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("INPUT", jerry_number(INPUT), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("OUTPUT", jerry_number(OUTPUT), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("INPUT_PULLUP", jerry_number(INPUT_PULLUP), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("INPUT_PULLDOWN", jerry_number(INPUT_PULLDOWN), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("INPUT", (jerry_value_t)(INPUT), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("OUTPUT", (jerry_value_t)(OUTPUT), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("INPUT_PULLUP", (jerry_value_t)(INPUT_PULLUP), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("INPUT_PULLDOWN", (jerry_value_t)(INPUT_PULLDOWN), true));
 #if defined(OUTPUT_OPENDRAIN)
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("OUTPUT_OPENDRAIN", jerry_number(OUTPUT_OPENDRAIN), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("OUTPUT_OPENDRAIN", (jerry_value_t)(OUTPUT_OPENDRAIN), true));
 #endif
-
+// For nodemcuv3 pins_arduino.h
   /* LEDs */
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("PIN_LED", jerry_number(PIN_LED), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("LED_BUILTIN", jerry_number(LED_BUILTIN), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("LEDR", jerry_number(LEDR), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("LEDG", jerry_number(LEDG), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("LEDB", jerry_number(LEDB), true));
-
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("PIN_LED", (jerry_value_t)(PIN_LED), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("LED_BUILTIN", (jerry_value_t)(LED_BUILTIN), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("KEY_BUILTIN", (jerry_value_t)(KEY_BUILTIN), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("TX", (jerry_value_t)(TX), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("RX", (jerry_value_t)(RX), true));  
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("SDA", (jerry_value_t)(SDA), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("SCL", (jerry_value_t)(SCL), true));  
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("SS", (jerry_value_t)(SS), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("MOSI", (jerry_value_t)(MOSI), true));  
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("MISO", (jerry_value_t)(MISO), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("SCK", (jerry_value_t)(SCK), true));  
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("LEDR", (jerry_value_t)(LEDR), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("LEDG", (jerry_value_t)(LEDG), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("LEDB", (jerry_value_t)(LEDB), true));
   /* Analog pins */
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A0", jerry_number(A0), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A1", jerry_number(A1), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A2", jerry_number(A2), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A3", jerry_number(A3), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A4", jerry_number(A4), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A5", jerry_number(A5), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A6", jerry_number(A6), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A7", jerry_number(A7), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A0", (jerry_value_t)(A0), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("A1", (jerry_value_t)(A1), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("A2", (jerry_value_t)(A2), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A3", (jerry_value_t)(A3), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A4", (jerry_value_t)(A4), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A5", (jerry_value_t)(A5), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A6", (jerry_value_t)(A6), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A7", (jerry_value_t)(A7), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A10", (jerry_value_t)(A10), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A11", (jerry_value_t)(A11), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A12", (jerry_value_t)(A12), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A13", (jerry_value_t)(A13), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A14", (jerry_value_t)(A14), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A15", (jerry_value_t)(A15), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A16", (jerry_value_t)(A16), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A17", (jerry_value_t)(A17), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("A18", (jerry_value_t)(A18), true));
+
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("T0", (jerry_value_t)(T0), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("T1", (jerry_value_t)(T1), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("T2", (jerry_value_t)(T2), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("T3", (jerry_value_t)(T3), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("T4", (jerry_value_t)(T4), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("T5", (jerry_value_t)(T5), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("T6", (jerry_value_t)(T6), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("T7", (jerry_value_t)(T7), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("T8", (jerry_value_t)(T8), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("T9", (jerry_value_t)(T9), true));
+
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("DAC1", (jerry_value_t)(DAC1), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("DAC2", (jerry_value_t)(DAC2), true));
+
+
 
   /* Digital pins */
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D0", jerry_number(D0), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D1", jerry_number(D1), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D2", jerry_number(D2), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D3", jerry_number(D3), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D4", jerry_number(D4), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D5", jerry_number(D5), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D6", jerry_number(D6), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D7", jerry_number(D7), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D8", jerry_number(D8), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D9", jerry_number(D9), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D10", jerry_number(D10), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D11", jerry_number(D11), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D12", jerry_number(D12), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D13", jerry_number(D13), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D14", jerry_number(D14), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D0", (jerry_value_t)(D0), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D1", (jerry_value_t)(D1), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D2", (jerry_value_t)(D2), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D3", (jerry_value_t)(D3), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D4", (jerry_value_t)(D4), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D5", (jerry_value_t)(D5), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D6", (jerry_value_t)(D6), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D7", (jerry_value_t)(D7), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D8", (jerry_value_t)(D8), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D9", (jerry_value_t)(D9), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D10", (jerry_value_t)(D10), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D11", (jerry_value_t)(D11), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D12", (jerry_value_t)(D12), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D13", (jerry_value_t)(D13), true));
+  // JERRYXX_BOOL_CHK(jerryxx_register_global_property("D14", (jerry_value_t)(D14), true));
 /* Pin D15, D16, D17 and D18 cannot be used as digital pin.*/
 /*
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D15", jerry_number (D15), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D16", jerry_number (D16), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D17", jerry_number (D17), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D18", jerry_number (D18), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D15", (jerry_value_t) (D15), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D16", (jerry_value_t) (D16), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D17", (jerry_value_t) (D17), true));
+  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D18", (jerry_value_t) (D18), true));
  */
-#if defined(CORE_CM7)
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D19", jerry_number(D19), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D20", jerry_number(D20), true));
-  JERRYXX_BOOL_CHK(jerryxx_register_global_property("D21", jerry_number(D21), true));
+// #if defined(CORE_CM7)
+//   JERRYXX_BOOL_CHK(jerryxx_register_global_property("D19", (jerry_value_t)(D19), true));
+//   JERRYXX_BOOL_CHK(jerryxx_register_global_property("D20", (jerry_value_t)(D20), true));
+//   JERRYXX_BOOL_CHK(jerryxx_register_global_property("D21", (jerry_value_t)(D21), true));
+// #endif
 #endif
-
   /* Register Functions in the global object */
 
   /* Digital I/O */
@@ -1148,7 +1203,8 @@ JERRYXX_DECLARE_FUNCTION(attach_interrupt)
     jerry_value_free(global_obj_val);
   };
 
-  attachInterruptParam((pin_size_t)pin, (voidFuncPtrParam)func, (PinStatus)mode, (void *)callback_fn);
+//  attachInterruptParam((pin_size_t)pin, (voidFuncPtrParam)func, (PinStatus)mode, (void *)callback_fn);
+  // attachInterrupt((pin_size_t)pin, (voidFuncPtrParam)func, (PinStatus)mode);// (void *)callback_fn);
 
   return jerry_undefined();
 } /* js_attach_interrupt */
@@ -1878,4 +1934,3 @@ JERRYXX_DECLARE_FUNCTION(is_whitespace)
 
   return jerry_number(isWhitespace(x));
 } /* js_is_whitespace */
-#endif

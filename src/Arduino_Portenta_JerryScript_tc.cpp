@@ -52,34 +52,12 @@ jerry_port_fatal(jerry_fatal_code_t code) /**< cause of error */
 double
 jerry_port_current_time(void)
 {
-  static uint64_t last_tick = 0;
-  static time_t last_time = 0;
-  static uint32_t skew = 0;
 
-  uint64_t curr_tick = millis()/1000; /* The value is in microseconds. */
-  time_t curr_time = time(NULL);         /*  The value is in seconds. */
-  double result = curr_time * 1000;
+  // uint64_t curr_micros = rtc.getMillis()/1000; /* The value is in microseconds. */
+  // time_t curr_time = rtc.getSecond();         /*  The value is in seconds. */
+  // double result = curr_micros;//curr_time * 1000;
+  return (double)(rtc.getLocalEpoch())*1000.0;
 
-  /* The us_ticker_read () has an overflow for each UINT_MAX microseconds
-   * (~71 mins). For each overflow event the ticker-based clock is about 33
-   * milliseconds fast. Without a timer thread the milliseconds part of the
-   * time can be corrected if the difference of two get_current_time calls
-   * are within the mentioned 71 mins. Above that interval we can assume
-   * that the milliseconds part of the time is negligibe.
-   */
-  if (curr_time - last_time > (time_t)(((uint32_t)-1) / 1000000))
-  {
-    skew = 0;
-  }
-  else if (last_tick > curr_tick)
-  {
-    skew = (skew + 33) % 1000;
-  }
-  result += (curr_tick / 1000 - skew) % 1000;
-
-  last_tick = curr_tick;
-  last_time = curr_time;
-  return result;
 } /* jerry_port_current_time */
 
 /**
@@ -90,10 +68,10 @@ jerry_port_current_time(void)
 int32_t
 jerry_port_local_tza(double unix_ms)
 {
-  (void)unix_ms;
+  // (void)unix_ms;
 
   /* We live in UTC. */
-  return 0; 
+  return (int32_t) (8*60*60*1000); //rtc.offset; 
 } /* jerry_port_local_tza */
 
 /**
@@ -153,17 +131,23 @@ jerry_port_print_buffer(const jerry_char_t *buffer_p, /**< string buffer */
 jerry_char_t *JERRY_ATTR_WEAK
 jerry_port_line_read(jerry_size_t *out_size_p)
 {
+  uint8_t  c;
+  String data = "";
   while (true)
   {
     if (wsSerial.available())
     {
-      String data = "";
       while (wsSerial.available())
       {
-        data += (char)wsSerial.read();
-      }
+        c = wsSerial.read();
+        data += (char)c;
+        // if (c=='\n') break;
 
+      }
+      if (c!='\n') continue;
       *out_size_p = data.length();
+      Serial.printf("[jerry][port]%s\n",data.c_str());
+      // return dont use local data it is stack risk.
       return (jerry_char_t *)((*out_size_p > 0) ? (new String(data))->c_str() : NULL);
     }
   }
@@ -244,7 +228,7 @@ jerry_port_source_free(uint8_t *buffer_p) /**< buffer to free */
 } /* jerry_port_source_free */
 
 #ifndef JERRY_GLOBAL_HEAP_SIZE
-#define JERRY_GLOBAL_HEAP_SIZE 512
+#define JERRY_GLOBAL_HEAP_SIZE 64 //512
 #endif /* JERRY_GLOBAL_HEAP_SIZE */
 
 /**
@@ -342,7 +326,7 @@ jerry_port_context_free(void)
 {
   free(current_context_p);
 } /* jerry_port_context_free */
-#if 1
+
 /**
  * Register a JavaScript property in the global object.
  *
@@ -384,29 +368,6 @@ jerry_value_t jerryxx_get_global_property(const char *name_p) /**< name of the p
 
   return result;
 } /* jerryxx_register_global_property */
-/**
- * Register Extra API into JavaScript global object.
- *
- * @return true - if the operation was successful,
- *         false - otherwise.
- */
-bool jerryxx_register_extra_api(void)
-{
-  bool ret = false;
-  /* Register the print function in the global object */
-  JERRYXX_BOOL_CHK(jerryx_register_global("print", jerryx_handler_print));
-
-cleanup:
-  return ret;
-}
-#else
-
-/*******************************************************************************
- *                                   Extra API                                 *
- ******************************************************************************/
-
-static std::unordered_map<int, std::Thread *> jerryxx_scheduler_threads_map;
-static std::mutex jerryxx_scheduler_threads_mutex;
 
 /**
  * Run JavaScript scheduler (user for switch setTimeout and setInterval threads).
@@ -414,10 +375,10 @@ static std::mutex jerryxx_scheduler_threads_mutex;
  * @return true - if the operation was successful,
  *         false - otherwise.
  */
-bool jerryxx_scheduler_yield(void)
-{
-  yield();
-} /* jerryxx_scheduler_yield */
+// bool jerryxx_scheduler_yield(void)
+// {
+//   yield();
+// } /* jerryxx_scheduler_yield */
 
 /**
  * Cleanup scheduler thread in state Deleted.
@@ -425,227 +386,14 @@ bool jerryxx_scheduler_yield(void)
  * @return true - if the operation was successful,
  *         false - otherwise.
  */
-bool jerryxx_cleanup_scheduler_map(void)
-{
-  std::unordered_map<int, rtos::Thread *>::const_iterator it;
-  for (it = jerryxx_scheduler_threads_map.begin(); it != jerryxx_scheduler_threads_map.end(); it++)
-  {
-    int thid = it->first;
-    rtos::Thread *thread = it->second;
-
-    if (thread->get_state() == rtos::Thread::Deleted)
-    {
-      thread->terminate();
-      jerryxx_scheduler_threads_mutex.lock();
-      jerryxx_scheduler_threads_map.erase(thid);
-      jerryxx_scheduler_threads_mutex.unlock();
-    }
-  }
-} /* jerryxx_cleanup_scheduler_map */
+// bool jerryxx_cleanup_scheduler_map(void)
+// {
+ 
+// } /* jerryxx_cleanup_scheduler_map */
 
 
-/**
- * Register Extra API into JavaScript global object.
- *
- * @return true - if the operation was successful,
- *         false - otherwise.
- */
-bool jerryxx_register_extra_api(void)
-{
-  bool ret = false;
 
-  /* Register the print function in the global object */
-  JERRYXX_BOOL_CHK(jerryx_register_global("print", jerryx_handler_print));
 
-  /* Register the setTimeout function in the global object */
-  JERRYXX_BOOL_CHK(jerryx_register_global("setTimeout", js_set_timeout));
-
-  /* Register the clearTimeout function in the global object */
-  JERRYXX_BOOL_CHK(jerryx_register_global("clearTimeout", js_clear_timeout));
-
-  /* Register the setInterval function in the global object */
-  JERRYXX_BOOL_CHK(jerryx_register_global("setInterval", js_set_interval));
-
-  /* Register the clearInterval function in the global object */
-  JERRYXX_BOOL_CHK(jerryx_register_global("clearInterval", js_clear_interval));
-
-cleanup:
-  return ret;
-} /* jerryxx_register_extra_api */
-
-/**
- * Javascript: setTimeout
- */
-JERRYXX_DECLARE_FUNCTION(set_timeout)
-{
-  JERRYX_UNUSED(call_info_p);
-  jerry_value_t callback_fn = 0;
-  uint32_t delay_time = 0;
-
-  const jerryx_arg_t mapping[] =
-      {
-          jerryx_arg_function(&callback_fn, JERRYX_ARG_REQUIRED),
-          jerryx_arg_uint32(&delay_time, JERRYX_ARG_CEIL, JERRYX_ARG_NO_CLAMP, JERRYX_ARG_NO_COERCE, JERRYX_ARG_OPTIONAL),
-      };
-
-  const jerry_value_t rv = jerryx_arg_transform_args(args_p, args_cnt, mapping, JERRYXX_ARRAY_SIZE(mapping));
-  if (jerry_value_is_exception(rv))
-  {
-    return rv;
-  }
-
-  jerryxx_cleanup_scheduler_map();
-
-  if (jerryxx_scheduler_threads_map.size() < JERRYXX_MAX_THREADS_NUMBER)
-  {
-    rtos::Thread *thread = new rtos::Thread;
-    thread->start([callback_fn, delay_time](void) -> void
-                  {
-      jerry_value_t callback_fn_copy = jerry_value_copy (callback_fn);
-
-      rtos::ThisThread::sleep_for(abs (delay_time));
-
-      jerry_value_t global_obj_val = jerry_current_realm ();
-      jerry_value_t result_val = jerry_call (callback_fn_copy, global_obj_val, NULL, 0);
-      jerry_value_free (result_val);
-      jerry_value_free (global_obj_val);
-      jerry_value_free (callback_fn_copy); });
-    int idx = (int)thread->get_id();
-
-    jerryxx_scheduler_threads_mutex.lock();
-    jerryxx_scheduler_threads_map.insert(std::make_pair(idx, thread));
-    jerryxx_scheduler_threads_mutex.unlock();
-
-    return jerry_number(idx);
-  }
-
-  return jerry_throw_sz(JERRY_ERROR_RANGE, "No scheduler slot free found.");
-} /* js_set_timeout */
-
-/**
- * Javascript: clearTimeout
- */
-JERRYXX_DECLARE_FUNCTION(clear_timeout)
-{
-  JERRYX_UNUSED(call_info_p);
-  uint32_t timeout_id = 0;
-
-  const jerryx_arg_t mapping[] =
-      {
-          jerryx_arg_uint32(&timeout_id, JERRYX_ARG_CEIL, JERRYX_ARG_NO_CLAMP, JERRYX_ARG_NO_COERCE, JERRYX_ARG_REQUIRED),
-      };
-
-  const jerry_value_t rv = jerryx_arg_transform_args(args_p, args_cnt, mapping, JERRYXX_ARRAY_SIZE(mapping));
-  if (jerry_value_is_exception(rv))
-  {
-    return rv;
-  }
-
-  std::unordered_map<int, rtos::Thread *>::const_iterator got = jerryxx_scheduler_threads_map.find(timeout_id);
-  if (got != jerryxx_scheduler_threads_map.end())
-  {
-    int idx = got->first;
-    rtos::Thread *thread = got->second;
-    thread->terminate();
-
-    jerryxx_scheduler_threads_mutex.lock();
-    jerryxx_scheduler_threads_map.erase(idx);
-    jerryxx_scheduler_threads_mutex.unlock();
-  }
-
-  jerryxx_cleanup_scheduler_map();
-
-  return jerry_undefined();
-} /* js_clear_timeout */
-
-/**
- * Javascript: setInterval
- */
-JERRYXX_DECLARE_FUNCTION(set_interval)
-{
-  JERRYX_UNUSED(call_info_p);
-  jerry_value_t callback_fn = 0;
-  uint32_t delay_time = 0;
-
-  const jerryx_arg_t mapping[] =
-      {
-          jerryx_arg_function(&callback_fn, JERRYX_ARG_REQUIRED),
-          jerryx_arg_uint32(&delay_time, JERRYX_ARG_CEIL, JERRYX_ARG_NO_CLAMP, JERRYX_ARG_NO_COERCE, JERRYX_ARG_OPTIONAL),
-      };
-
-  const jerry_value_t rv = jerryx_arg_transform_args(args_p, args_cnt, mapping, JERRYXX_ARRAY_SIZE(mapping));
-  if (jerry_value_is_exception(rv))
-  {
-    return rv;
-  }
-
-  jerryxx_cleanup_scheduler_map();
-
-  if (jerryxx_scheduler_threads_map.size() < JERRYXX_MAX_THREADS_NUMBER)
-  {
-    rtos::Thread *thread = new rtos::Thread;
-    thread->start([callback_fn, delay_time](void) -> void
-                  {
-      while(true)
-      {
-        jerry_value_t callback_fn_copy = jerry_value_copy (callback_fn);
-
-        rtos::ThisThread::sleep_for(abs (delay_time));
-
-        jerry_value_t global_obj_val = jerry_current_realm ();
-        jerry_value_t result_val = jerry_call (callback_fn_copy, global_obj_val, NULL, 0);
-        jerry_value_free (result_val);
-        jerry_value_free (global_obj_val);
-        jerry_value_free (callback_fn_copy);
-      } });
-    int idx = (int)thread->get_id();
-
-    jerryxx_scheduler_threads_mutex.lock();
-    jerryxx_scheduler_threads_map.insert(std::make_pair(idx, thread));
-    jerryxx_scheduler_threads_mutex.unlock();
-
-    return jerry_number(idx);
-  }
-
-  return jerry_throw_sz(JERRY_ERROR_RANGE, "No scheduler slot free found.");
-} /* js_set_interval */
-
-/**
- * Javascript: clearInterval
- */
-JERRYXX_DECLARE_FUNCTION(clear_interval)
-{
-  JERRYX_UNUSED(call_info_p);
-  uint32_t interval_id = 0;
-
-  const jerryx_arg_t mapping[] =
-      {
-          jerryx_arg_uint32(&interval_id, JERRYX_ARG_CEIL, JERRYX_ARG_NO_CLAMP, JERRYX_ARG_NO_COERCE, JERRYX_ARG_REQUIRED),
-      };
-
-  const jerry_value_t rv = jerryx_arg_transform_args(args_p, args_cnt, mapping, JERRYXX_ARRAY_SIZE(mapping));
-  if (jerry_value_is_exception(rv))
-  {
-    return rv;
-  }
-
-  std::unordered_map<int, rtos::Thread *>::const_iterator got = jerryxx_scheduler_threads_map.find(interval_id);
-  if (got != jerryxx_scheduler_threads_map.end())
-  {
-    int idx = got->first;
-    rtos::Thread *thread = got->second;
-    thread->terminate();
-
-    jerryxx_scheduler_threads_mutex.lock();
-    jerryxx_scheduler_threads_map.erase(idx);
-    jerryxx_scheduler_threads_mutex.unlock();
-  }
-
-  jerryxx_cleanup_scheduler_map();
-
-  return jerry_undefined();
-} /* js_clear_interval */
-#endif // no scheduler
 /*******************************************************************************
  *                                  Arduino API                                *
  ******************************************************************************/
@@ -772,7 +520,7 @@ return true;
   JERRYXX_BOOL_CHK(jerryx_register_global("delay", js_delay));
   JERRYXX_BOOL_CHK(jerryx_register_global("delayMicroseconds", js_delay_microseconds));
   JERRYXX_BOOL_CHK(jerryx_register_global("micros", js_micros));
-  JERRYXX_BOOL_CHK(jerryx_register_global("millis", js_millis));
+  // JERRYXX_BOOL_CHK(jerryx_register_global("millis", js_millis)); ??
   /* Math */
   JERRYXX_BOOL_CHK(jerryx_register_global("constrain", js_constrain));
   JERRYXX_BOOL_CHK(jerryx_register_global("map", js_map));
@@ -983,14 +731,14 @@ JERRYXX_DECLARE_FUNCTION(micros)
 /**
  * Arduino: millis
  */
-JERRYXX_DECLARE_FUNCTION(millis)
-{
-  JERRYX_UNUSED(call_info_p);
-  JERRYX_UNUSED(args_p);
-  JERRYXX_ON_ARGS_COUNT_THROW_ERROR_SYNTAX(args_cnt != 0, "Wrong arguments count");
+// JERRYXX_DECLARE_FUNCTION(millis)
+// {
+//   JERRYX_UNUSED(call_info_p);
+//   JERRYX_UNUSED(args_p);
+//   JERRYXX_ON_ARGS_COUNT_THROW_ERROR_SYNTAX(args_cnt != 0, "Wrong arguments count");
 
-  return jerry_number(millis());
-} /* js_millis */
+//   return jerry_number(millis());
+// } /* js_millis */
 
 /**
  * Arduino: randomSeed
@@ -1202,7 +950,7 @@ JERRYXX_DECLARE_FUNCTION(attach_interrupt)
     jerry_value_free(jerry_call((jerry_value_t)callback_fn, global_obj_val, NULL, 0));
     jerry_value_free(global_obj_val);
   };
-
+//spuggy0919 compiler issue
 //  attachInterruptParam((pin_size_t)pin, (voidFuncPtrParam)func, (PinStatus)mode, (void *)callback_fn);
   // attachInterrupt((pin_size_t)pin, (voidFuncPtrParam)func, (PinStatus)mode);// (void *)callback_fn);
 

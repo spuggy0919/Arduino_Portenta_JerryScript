@@ -8,7 +8,7 @@ https://github.com/dmazzella/Arduino_Portenta_JerryScript
 
 [libarary license MIT](https://github.com/spuggy0919/Arduino_Portenta_JerryScript/blob/main/LICENSE)
 
-[JerryScript LICENSE Apache License 2.0](https://github.com/jerryscript-project/jerryscript/blob/master/LICENSE)
+[JerryScript LICENSE Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0)
 
 
 ### Important How to let tinyConsole work with JerryScript 

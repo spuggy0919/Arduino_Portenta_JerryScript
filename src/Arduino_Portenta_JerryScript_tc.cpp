@@ -520,7 +520,7 @@ return true;
   JERRYXX_BOOL_CHK(jerryx_register_global("delay", js_delay));
   JERRYXX_BOOL_CHK(jerryx_register_global("delayMicroseconds", js_delay_microseconds));
   JERRYXX_BOOL_CHK(jerryx_register_global("micros", js_micros));
-  // JERRYXX_BOOL_CHK(jerryx_register_global("millis", js_millis)); ??
+  JERRYXX_BOOL_CHK(jerryx_register_global("millis", js_millis)); 
   /* Math */
   JERRYXX_BOOL_CHK(jerryx_register_global("constrain", js_constrain));
   JERRYXX_BOOL_CHK(jerryx_register_global("map", js_map));
@@ -731,14 +731,14 @@ JERRYXX_DECLARE_FUNCTION(micros)
 /**
  * Arduino: millis
  */
-// JERRYXX_DECLARE_FUNCTION(millis)
-// {
-//   JERRYX_UNUSED(call_info_p);
-//   JERRYX_UNUSED(args_p);
-//   JERRYXX_ON_ARGS_COUNT_THROW_ERROR_SYNTAX(args_cnt != 0, "Wrong arguments count");
+JERRYXX_DECLARE_FUNCTION(millis)
+{
+  JERRYX_UNUSED(call_info_p);
+  JERRYX_UNUSED(args_p);
+  JERRYXX_ON_ARGS_COUNT_THROW_ERROR_SYNTAX(args_cnt != 0, "Wrong arguments count");
 
-//   return jerry_number(millis());
-// } /* js_millis */
+  return jerry_number(millis());
+} /* js_millis */
 
 /**
  * Arduino: randomSeed
@@ -924,6 +924,17 @@ JERRYXX_DECLARE_FUNCTION(no_interrupts)
 /**
  * Arduino: attachInterrupt
  */
+
+static jerry_value_t callbackfn;
+// static jerry_value_t param;
+void isrFunc(){
+  
+    jerry_value_t global_obj_val = jerry_current_realm();
+    jerry_value_free(jerry_call((jerry_value_t)callbackfn, global_obj_val, NULL, 0));
+    jerry_value_free(global_obj_val);
+
+}
+
 JERRYXX_DECLARE_FUNCTION(attach_interrupt)
 {
   JERRYX_UNUSED(call_info_p);
@@ -944,15 +955,11 @@ JERRYXX_DECLARE_FUNCTION(attach_interrupt)
     return rv;
   }
 
-  auto func = [](void *callback_fn) -> void
-  {
-    jerry_value_t global_obj_val = jerry_current_realm();
-    jerry_value_free(jerry_call((jerry_value_t)callback_fn, global_obj_val, NULL, 0));
-    jerry_value_free(global_obj_val);
-  };
-//spuggy0919 compiler issue
-//  attachInterruptParam((pin_size_t)pin, (voidFuncPtrParam)func, (PinStatus)mode, (void *)callback_fn);
-  // attachInterrupt((pin_size_t)pin, (voidFuncPtrParam)func, (PinStatus)mode);// (void *)callback_fn);
+
+//  spuggy0919 compiler issue
+  callbackfn = callback_fn;
+ //attachInterruptParam((pin_size_t)pin, (voidFuncPtrParam)func, (PinStatus)mode, (void *)callback_fn);
+  attachInterrupt((pin_size_t)pin, isrFunc, (PinStatus)mode);// (void *)callback_fn);
 
   return jerry_undefined();
 } /* js_attach_interrupt */

@@ -43,7 +43,14 @@ jerry_port_fatal(jerry_fatal_code_t code) /**< cause of error */
 {
   exit((int)code);
 } /* jerry_port_fatal */
-
+/**
+ * Default implementation of jerry_port_sleep, uses 'usleep'.
+ */
+void
+jerry_port_sleep (uint32_t sleep_time) /**< milliseconds to sleep */
+{
+  delay ((useconds_t) sleep_time * 1000);
+} /* jerry_port_sleep */
 /**
  * Implementation of jerry_port_current_time.
  *

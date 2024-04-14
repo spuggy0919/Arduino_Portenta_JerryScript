@@ -845,7 +845,7 @@ jerry_value_t
 jerryx_arg_transform_ignore (jerryx_arg_js_iterator_t *js_arg_iter_p, /**< available JS args */
                              const jerryx_arg_t *c_arg_p) /**< the native arg */
 {
-  (void) js_arg_iter_p; /* unused */
+  jerry_value_t js_arg = jerryx_arg_js_iterator_pop (js_arg_iter_p);
   (void) c_arg_p; /* unused */
 
   return jerry_undefined ();

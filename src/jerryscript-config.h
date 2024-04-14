@@ -152,7 +152,7 @@
  *  1: Enable the debugger.
  */
 #ifndef JERRY_DEBUGGER
-#define JERRY_DEBUGGER 0
+#define JERRY_DEBUGGER 1
 #endif /* !defined (JERRY_DEBUGGER) */
 
 /**
